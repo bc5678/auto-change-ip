@@ -6,14 +6,7 @@ import shutil
 from urllib.request import urlopen
 from selenium import webdriver
 
-ovpn_path = 'ovpn/'
 vpngate_home = 'http://www.vpngate.net'
-vpngate_en_home = vpngate_home + '/en/'
-#countries = ['Taiwan', 'Macau', 'Hong', 'Japan']
-#countries = ['Ukraine', 'Poland']
-#countries = ['Korea Republic of']
-#countries = ['Germany']
-countries = ['']
 
 def get_file_from_http(url, dst):
 	bytes_per_MB = 1024*1024
@@ -50,7 +43,7 @@ def refresh_list(driver):
 	button = driver.find_element_by_id('Button3')
 	button.click()
 
-def get_ovpn(driver, ovpnpages):
+def get_ovpn(driver, ovpnpages, ovpn_path):
 	for page in ovpnpages:
 		page = page.replace('&amp;', '&')
 		driver.get(vpngate_home + '/en/' + page)
@@ -59,43 +52,45 @@ def get_ovpn(driver, ovpnpages):
 			ovpnfile_link = re.search('(/common/openvpn.+udp_\d+.ovpn)', driver.page_source)
 		if ovpnfile_link:
 			ovpnfile_link = vpngate_home + ovpnfile_link.group(1).replace('&amp;', '&')
-			get_file_from_http(ovpnfile_link, 'ovpn')
+			get_file_from_http(ovpnfile_link, ovpn_path[0:-1])
 
 
-def build_tblk():
+def build_tblk(ovpn_path):
 	for file in os.listdir(ovpn_path):
-	        if file.endswith('.ovpn'):
-	                print(file)
-	                tblk = re.match('vpngate_([0-9a-z-]+).opengw.+', file).group(1) + '.tblk'
-	                if not os.path.exists(ovpn_path + '/' + tblk):
-	                        os.makedirs(ovpn_path + '/' + tblk)
-	                        shutil.move(ovpn_path + '/' + file, ovpn_path + '/' + tblk)
-	                else:
-	                        os.remove(ovpn_path + '/' + file)
+			if file.endswith('.ovpn'):
+					print(file)
+					tblk = re.match('vpngate_([0-9a-z-]+).opengw.+', file).group(1) + '.tblk'
+					if not os.path.exists(ovpn_path + '/' + tblk):
+							os.makedirs(ovpn_path + '/' + tblk)
+							shutil.move(ovpn_path + '/' + file, ovpn_path + '/' + tblk)
+					else:
+							os.remove(ovpn_path + '/' + file)
 
-if os.path.exists('ovpn'):
-	shutil.rmtree('ovpn')
-os.makedirs('ovpn')
+def build_OVPN(ovpn_path, countries, scan_pages): 
+	if os.path.exists(ovpn_path[0:-1]):
+		shutil.rmtree(ovpn_path[0:-1])
+	os.makedirs(ovpn_path[0:-1])
 
-driver = webdriver.Safari()
-driver.get('http://www.google.com')
-driver.maximize_window()
+	#driver = webdriver.Safari()
+	driver = webdriver.PhantomJS()
+	driver.get('http://www.google.com')
+	driver.maximize_window()
 
-for i in range(1): # refresh how many times for ovpn webpage
-	driver.get(vpngate_home + '/en/')
-	time.sleep(1)
-	refresh_list(driver)
-	ovpnpages = []
-	if countries:
-		for country in countries: 
-			country_limit = country + '.*'
-			ovpnpages += re.findall(country_limit + '(do_openvpn.aspx.+hid=\d+)', driver.page_source)
-	else:
-		ovpnpages += re.findall('(do_openvpn.aspx.+hid=\d+)', driver.page_source)
-		
-	get_ovpn(driver, ovpnpages)
+	for i in range(scan_pages): # refresh how many times for ovpn webpage
+		driver.get(vpngate_home + '/en/')
+		time.sleep(1)
+		refresh_list(driver)
+		ovpnpages = []
+		if countries:
+			for country in countries: 
+				country_limit = country + '.*'
+				ovpnpages += re.findall(country_limit + '(do_openvpn.aspx.+hid=\d+)', driver.page_source)
+		else:
+			ovpnpages += re.findall('(do_openvpn.aspx.+hid=\d+)', driver.page_source)
+			
+		get_ovpn(driver, ovpnpages, ovpn_path)
 
-driver.close()
+	driver.close()
 
-build_tblk()
-os.system("""osascript import_tblk.scpt""")
+	build_tblk(ovpn_path)
+	os.system("""osascript import_tblk.scpt""")
